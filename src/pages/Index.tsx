@@ -2,15 +2,18 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Plus } from 'lucide-react';
-import { getLessons } from '@/services/storageService';
+import { getLessons, deleteLesson } from '@/services/storageService';
 import { Lesson } from '@/types/lesson';
 import LessonCard from '@/components/lesson/LessonCard';
 import CreateLessonModal from '@/components/lesson/CreateLessonModal';
+import AILessonModal from '@/components/lesson/AILessonModal';
+import { toast } from '@/hooks/use-toast';
 
 const Index = () => {
   const navigate = useNavigate();
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAIModalOpen, setIsAIModalOpen] = useState(false);
 
   useEffect(() => {
     setLessons(getLessons());
@@ -18,6 +21,19 @@ const Index = () => {
 
   const handlePlayLesson = (lessonId: string) => {
     navigate(`/play/${lessonId}`);
+  };
+
+  const handleEditLesson = (lessonId: string) => {
+    navigate(`/edit/${lessonId}`);
+  };
+
+  const handleDeleteLesson = (lessonId: string) => {
+    deleteLesson(lessonId);
+    setLessons(getLessons());
+    toast({
+      title: 'Lesson deleted',
+      description: 'The lesson has been removed.',
+    });
   };
 
   const handleCreateLesson = () => {
@@ -60,6 +76,8 @@ const Index = () => {
                 key={lesson.id}
                 lesson={lesson}
                 onClick={() => handlePlayLesson(lesson.id)}
+                onEdit={() => handleEditLesson(lesson.id)}
+                onDelete={() => handleDeleteLesson(lesson.id)}
               />
             ))}
           </div>
@@ -80,6 +98,14 @@ const Index = () => {
         open={isModalOpen}
         onOpenChange={setIsModalOpen}
         onSelectTemplate={handleCreateLesson}
+        onSelectAI={() => setIsAIModalOpen(true)}
+      />
+
+      {/* AI Lesson Modal */}
+      <AILessonModal
+        open={isAIModalOpen}
+        onOpenChange={setIsAIModalOpen}
+        onLessonCreated={() => setLessons(getLessons())}
       />
     </div>
   );
