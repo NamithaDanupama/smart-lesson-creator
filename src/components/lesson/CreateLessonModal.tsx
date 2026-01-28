@@ -12,9 +12,10 @@ interface CreateLessonModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelectTemplate: () => void;
+  onSelectAI: () => void;
 }
 
-const CreateLessonModal = ({ open, onOpenChange, onSelectTemplate }: CreateLessonModalProps) => {
+const CreateLessonModal = ({ open, onOpenChange, onSelectTemplate, onSelectAI }: CreateLessonModalProps) => {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -39,16 +40,14 @@ const CreateLessonModal = ({ open, onOpenChange, onSelectTemplate }: CreateLesso
           
           <Button
             variant="outline"
-            className="flex h-auto flex-col items-center gap-2 p-6 text-left opacity-60"
-            disabled
+            className="flex h-auto flex-col items-center gap-2 p-6 text-left hover:border-primary hover:bg-primary/5"
+            onClick={() => {
+              onOpenChange(false);
+              onSelectAI();
+            }}
           >
-            <div className="relative">
-              <Sparkles className="h-8 w-8 text-muted-foreground" />
-              <Badge variant="secondary" className="absolute -right-8 -top-2 text-[10px]">
-                Coming Soon
-              </Badge>
-            </div>
-            <span className="text-lg font-semibold text-muted-foreground">
+            <Sparkles className="h-8 w-8 text-primary" />
+            <span className="text-lg font-semibold">
               Use AI Generated Template
             </span>
             <span className="text-sm text-muted-foreground">
