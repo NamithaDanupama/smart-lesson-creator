@@ -7,6 +7,7 @@ import { getLessonById } from '@/services/storageService';
 import { speak, stop, preloadVoices } from '@/services/ttsService';
 import { Lesson } from '@/types/lesson';
 import { toast } from '@/hooks/use-toast';
+import mochiCharacter from '@/assets/mochi-character.png';
 
 const LessonPlayer = () => {
   const navigate = useNavigate();
@@ -112,39 +113,62 @@ const LessonPlayer = () => {
 
       {/* Main Content Area */}
       <main className="flex flex-1 px-6 pb-24">
-        <div className="mx-auto w-full max-w-6xl rounded-3xl bg-secondary/50 p-6">
-          <div className="grid h-full grid-cols-1 gap-6 lg:grid-cols-2">
-            {/* Left Side - Character with Speech Bubble */}
-            <div className="relative flex flex-col items-center justify-center">
-              {/* Character */}
-              <div className="animate-float relative">
-                <img 
-                  src="https://i.imgur.com/YKoNvGy.png" 
-                  alt="Mochi Character" 
-                  className="h-64 w-64 object-contain lg:h-80 lg:w-80"
-                  onError={(e) => {
-                    // Fallback to emoji if image fails
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                    target.parentElement!.innerHTML = '<div class="text-9xl animate-float">🐵</div>';
-                  }}
-                />
-              </div>
-              
-              {/* Speech Bubble */}
-              <div className="relative mt-4 max-w-xs rounded-2xl bg-card px-6 py-4 shadow-lg">
-                <p className="text-center text-lg font-semibold text-foreground">
-                  {currentItem.spokenText || currentItem.name}
-                </p>
-                {/* Bubble pointer */}
-                <div className="absolute -top-3 left-1/2 h-6 w-6 -translate-x-1/2 rotate-45 bg-card" />
+        <div className="mx-auto flex w-full max-w-6xl items-center gap-8">
+          {/* Left Side - Mochi Character (simple companion) */}
+          <div className="hidden flex-shrink-0 lg:block">
+            <div className="animate-float">
+              <img 
+                src={mochiCharacter}
+                alt="Mochi Character" 
+                className="h-48 w-48 object-contain opacity-90"
+              />
+            </div>
+          </div>
+
+          {/* Right Side - Main Learning Content (highlighted focus) */}
+          <div className="flex flex-1 items-center justify-center">
+            <div className="lesson-content-card flex w-full max-w-lg flex-col items-center rounded-3xl border-4 border-primary/20 bg-card p-8 shadow-xl">
+              {/* Image - Main focus area */}
+              <div className="aspect-square w-full max-w-sm overflow-hidden rounded-2xl bg-info/30">
+                {currentItem.image ? (
+                  <img
+                    src={currentItem.image}
+                    alt={currentItem.name}
+                    className="h-full w-full object-contain p-4"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center">
+                    <span className="text-8xl">📷</span>
+                  </div>
+                )}
               </div>
 
-              {/* Control Buttons */}
-              <div className="mt-8 flex gap-4">
+              {/* Item Name - Large and prominent */}
+              <h2 className="mt-6 text-4xl font-extrabold uppercase tracking-wide text-foreground">
+                {currentItem.name}
+              </h2>
+
+              {/* Spoken text if different */}
+              {currentItem.spokenText && currentItem.spokenText !== currentItem.name && (
+                <p className="mt-2 text-lg text-muted-foreground">
+                  "{currentItem.spokenText}"
+                </p>
+              )}
+
+              {/* Action Buttons - All together for easy access */}
+              <div className="mt-6 flex flex-wrap justify-center gap-3">
+                <Button
+                  variant="default"
+                  className={`gap-2 rounded-xl px-6 py-3 text-lg ${isSpeaking ? 'animate-pulse' : ''}`}
+                  onClick={handleSpeak}
+                >
+                  <Volume2 className="h-5 w-5" />
+                  Listen
+                </Button>
+
                 <Button
                   variant="secondary"
-                  className="gap-2 rounded-xl px-6 py-3"
+                  className="gap-2 rounded-xl px-6 py-3 text-lg"
                   onClick={handleRepeat}
                 >
                   <RotateCcw className="h-5 w-5" />
@@ -153,46 +177,11 @@ const LessonPlayer = () => {
 
                 <Button
                   variant="secondary"
-                  className="gap-2 rounded-xl px-6 py-3"
+                  className="gap-2 rounded-xl px-6 py-3 text-lg"
                   onClick={handleNext}
                 >
                   <ArrowRight className="h-5 w-5" />
-                  Next
-                </Button>
-              </div>
-            </div>
-
-            {/* Right Side - Content Card */}
-            <div className="flex items-center justify-center">
-              <div className="lesson-content-card flex w-full max-w-md flex-col items-center">
-                {/* Image */}
-                <div className="aspect-square w-full overflow-hidden rounded-2xl bg-card">
-                  {currentItem.image ? (
-                    <img
-                      src={currentItem.image}
-                      alt={currentItem.name}
-                      className="h-full w-full object-contain p-4"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-muted">
-                      <span className="text-8xl">📷</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Item Name */}
-                <h2 className="mt-6 text-3xl font-bold uppercase tracking-wide text-foreground">
-                  {currentItem.name}
-                </h2>
-
-                {/* Listen Button */}
-                <Button
-                  variant="secondary"
-                  className={`mt-4 gap-2 rounded-xl px-6 py-3 ${isSpeaking ? 'animate-pulse bg-primary text-primary-foreground' : ''}`}
-                  onClick={handleSpeak}
-                >
-                  <Volume2 className="h-5 w-5" />
-                  Listen
+                  {isLastItem ? 'Finish' : 'Next'}
                 </Button>
               </div>
             </div>
