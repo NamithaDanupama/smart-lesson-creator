@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { ArrowLeft, ChevronRight, Volume2, RotateCcw, X } from 'lucide-react';
+import { Volume2, RotateCcw, ArrowRight } from 'lucide-react';
 import { getLessonById } from '@/services/storageService';
 import { speak, stop, preloadVoices } from '@/services/ttsService';
 import { Lesson } from '@/types/lesson';
@@ -95,98 +94,122 @@ const LessonPlayer = () => {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-b from-sky-100 to-sky-50">
+    <div className="flex min-h-screen flex-col bg-background">
       {/* Header */}
-      <header className="flex items-center justify-between p-4">
-        <Button variant="ghost" size="icon" onClick={handleExit}>
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <h1 className="text-lg font-semibold text-foreground">{lesson.title}</h1>
-        <Button variant="ghost" size="icon" onClick={handleExit}>
-          <X className="h-5 w-5" />
+      <header className="flex items-center justify-between px-6 py-4">
+        <div className="w-20" /> {/* Spacer */}
+        <h1 className="text-xl font-bold text-foreground">
+          Learning: {lesson.title}
+        </h1>
+        <Button 
+          variant="secondary" 
+          className="rounded-full px-6"
+          onClick={handleExit}
+        >
+          End
         </Button>
       </header>
 
-      {/* Main Content */}
-      <main className="flex flex-1 flex-col items-center justify-center px-4 pb-32">
-        {/* Mascot with Speech Bubble */}
-        <div className="mb-6 flex items-end gap-2">
-          {/* Speech Bubble */}
-          <div className="relative max-w-[250px] rounded-2xl bg-white p-4 shadow-lg">
-            <p className="text-center text-lg font-medium text-foreground">
-              {currentItem.spokenText || currentItem.name}
-            </p>
-            {/* Bubble tail */}
-            <div className="absolute -bottom-2 right-8 h-4 w-4 rotate-45 bg-white" />
-          </div>
-          
-          {/* Mascot */}
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-orange-400 text-4xl shadow-lg">
-            🦊
+      {/* Main Content Area */}
+      <main className="flex flex-1 px-6 pb-24">
+        <div className="mx-auto w-full max-w-6xl rounded-3xl bg-secondary/50 p-6">
+          <div className="grid h-full grid-cols-1 gap-6 lg:grid-cols-2">
+            {/* Left Side - Character with Speech Bubble */}
+            <div className="relative flex flex-col items-center justify-center">
+              {/* Character */}
+              <div className="animate-float relative">
+                <img 
+                  src="https://i.imgur.com/YKoNvGy.png" 
+                  alt="Mochi Character" 
+                  className="h-64 w-64 object-contain lg:h-80 lg:w-80"
+                  onError={(e) => {
+                    // Fallback to emoji if image fails
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    target.parentElement!.innerHTML = '<div class="text-9xl animate-float">🐵</div>';
+                  }}
+                />
+              </div>
+              
+              {/* Speech Bubble */}
+              <div className="relative mt-4 max-w-xs rounded-2xl bg-card px-6 py-4 shadow-lg">
+                <p className="text-center text-lg font-semibold text-foreground">
+                  {currentItem.spokenText || currentItem.name}
+                </p>
+                {/* Bubble pointer */}
+                <div className="absolute -top-3 left-1/2 h-6 w-6 -translate-x-1/2 rotate-45 bg-card" />
+              </div>
+
+              {/* Control Buttons */}
+              <div className="mt-8 flex gap-4">
+                <Button
+                  variant="secondary"
+                  className="gap-2 rounded-xl px-6 py-3"
+                  onClick={handleRepeat}
+                >
+                  <RotateCcw className="h-5 w-5" />
+                  Repeat
+                </Button>
+
+                <Button
+                  variant="secondary"
+                  className="gap-2 rounded-xl px-6 py-3"
+                  onClick={handleNext}
+                >
+                  <ArrowRight className="h-5 w-5" />
+                  Next
+                </Button>
+              </div>
+            </div>
+
+            {/* Right Side - Content Card */}
+            <div className="flex items-center justify-center">
+              <div className="lesson-content-card flex w-full max-w-md flex-col items-center">
+                {/* Image */}
+                <div className="aspect-square w-full overflow-hidden rounded-2xl bg-card">
+                  {currentItem.image ? (
+                    <img
+                      src={currentItem.image}
+                      alt={currentItem.name}
+                      className="h-full w-full object-contain p-4"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-muted">
+                      <span className="text-8xl">📷</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Item Name */}
+                <h2 className="mt-6 text-3xl font-bold uppercase tracking-wide text-foreground">
+                  {currentItem.name}
+                </h2>
+
+                {/* Listen Button */}
+                <Button
+                  variant="secondary"
+                  className={`mt-4 gap-2 rounded-xl px-6 py-3 ${isSpeaking ? 'animate-pulse bg-primary text-primary-foreground' : ''}`}
+                  onClick={handleSpeak}
+                >
+                  <Volume2 className="h-5 w-5" />
+                  Listen
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
-
-        {/* Item Card */}
-        <Card className="w-full max-w-sm overflow-hidden rounded-3xl border-4 border-white bg-white shadow-xl">
-          <div className="aspect-square overflow-hidden bg-gradient-to-br from-primary/10 to-secondary/20">
-            {currentItem.image ? (
-              <img
-                src={currentItem.image}
-                alt={currentItem.name}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center">
-                <span className="text-6xl">📷</span>
-              </div>
-            )}
-          </div>
-          <div className="p-4 text-center">
-            <h2 className="text-2xl font-bold text-foreground">{currentItem.name}</h2>
-          </div>
-        </Card>
       </main>
 
-      {/* Bottom Controls */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur pb-safe">
-        {/* Progress */}
-        <div className="px-4 pt-3">
-          <div className="mb-1 flex items-center justify-between text-sm text-muted-foreground">
-            <span>Progress</span>
+      {/* Bottom Progress Bar */}
+      <footer className="fixed bottom-0 left-0 right-0 bg-background px-6 py-4">
+        <div className="mx-auto max-w-6xl">
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <span className="font-medium">Lesson Progress</span>
             <span>{currentIndex + 1} of {lesson.items.length}</span>
           </div>
-          <Progress value={progress} className="h-2" />
+          <Progress value={progress} className="mt-2 h-2" />
         </div>
-
-        {/* Action Buttons */}
-        <div className="flex items-center justify-center gap-4 p-4">
-          <Button
-            variant="outline"
-            size="lg"
-            className="h-14 w-14 rounded-full"
-            onClick={handleRepeat}
-          >
-            <RotateCcw className="h-6 w-6" />
-          </Button>
-
-          <Button
-            size="lg"
-            className={`h-16 w-16 rounded-full ${isSpeaking ? 'animate-pulse bg-green-500 hover:bg-green-600' : ''}`}
-            onClick={handleSpeak}
-          >
-            <Volume2 className="h-7 w-7" />
-          </Button>
-
-          <Button
-            size="lg"
-            className="h-14 gap-1 rounded-full px-6"
-            onClick={handleNext}
-          >
-            {isLastItem ? 'Finish' : 'Next'}
-            <ChevronRight className="h-5 w-5" />
-          </Button>
-        </div>
-      </div>
+      </footer>
     </div>
   );
 };

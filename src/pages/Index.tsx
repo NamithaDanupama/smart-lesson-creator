@@ -41,10 +41,10 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-sky-100 to-sky-50">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-10 border-b border-sky-200/50 bg-white/80 backdrop-blur">
-        <div className="mx-auto flex max-w-4xl items-center justify-between p-4">
+      <header className="border-b border-border bg-card">
+        <div className="flex items-center justify-between px-6 py-4">
           <Button variant="ghost" size="icon" className="text-foreground">
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -54,7 +54,7 @@ const Index = () => {
       </header>
 
       {/* Main Content */}
-      <main className="mx-auto max-w-4xl p-4 pb-24">
+      <main className="p-6">
         {lessons.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="mb-4 text-6xl">📚</div>
@@ -64,13 +64,16 @@ const Index = () => {
             <p className="mb-6 text-muted-foreground">
               Create your first lesson to get started!
             </p>
-            <Button onClick={() => setIsModalOpen(true)}>
+            <Button 
+              onClick={() => setIsModalOpen(true)}
+              className="rounded-full"
+            >
               <Plus className="mr-2 h-4 w-4" />
               Create Lesson
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {lessons.map(lesson => (
               <LessonCard
                 key={lesson.id}
