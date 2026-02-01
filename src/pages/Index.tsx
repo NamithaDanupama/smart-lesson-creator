@@ -45,7 +45,12 @@ const Index = () => {
       {/* Header */}
       <header className="border-b border-border bg-card">
         <div className="flex items-center justify-between px-6 py-4">
-          <Button variant="ghost" size="icon" className="text-foreground">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="text-foreground"
+            // onClick={() => navigate('/YourMainPageRoute')} // Uncomment and update this to link to your main page
+          >
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <h1 className="text-xl font-bold text-foreground">Activity Library</h1>
