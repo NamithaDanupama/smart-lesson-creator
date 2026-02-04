@@ -1,11 +1,15 @@
 /**
  * AI Lesson Generation Service
  * 
- * Uses Gemini API via Edge Function for lesson generation with images.
+ * Calls Flask backend API for lesson and image generation using Gemini.
+ * Configure FLASK_API_URL to point to your Flask server.
  */
 
 import { createLesson } from './storageService';
 import { Lesson, LessonFormData } from '@/types/lesson';
+
+// Configure this to your Flask backend URL
+const FLASK_API_URL = import.meta.env.VITE_FLASK_API_URL || 'http://localhost:5000';
 
 export interface AIGenerationRequest {
   topic: string;
@@ -19,67 +23,22 @@ export interface AIGenerationResult {
   error?: string;
 }
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+interface GeneratedItem {
+  name: string;
+  spokenText: string;
+  image: string;
+}
+
+interface FlaskLessonResponse {
+  success: boolean;
+  title: string;
+  description: string;
+  items: GeneratedItem[];
+  error?: string;
+}
 
 /**
- * Generate lesson content using Gemini API
- */
-const generateLessonContent = async (topic: string, itemCount: number = 5) => {
-  // Generate lesson structure locally (could be enhanced with AI later)
-  const items = [];
-  
-  // Common educational topics with child-friendly content
-  const topicItems: Record<string, { name: string; spokenText: string }[]> = {
-    default: Array.from({ length: itemCount }, (_, i) => ({
-      name: `${topic} Item ${i + 1}`,
-      spokenText: `This is item ${i + 1} about ${topic}. Let's learn together!`,
-    })),
-  };
-
-  // Use topic-specific items if available, otherwise generate generic ones
-  const generatedItems = topicItems[topic.toLowerCase()] || topicItems.default;
-
-  return {
-    title: `Learn About ${topic}`,
-    description: `An AI-generated lesson about ${topic} for young learners.`,
-    items: generatedItems.slice(0, itemCount),
-  };
-};
-
-/**
- * Generate images for lesson items using Gemini via Edge Function
- */
-const generateImages = async (
-  topic: string,
-  items: { name: string; spokenText: string }[]
-): Promise<string[]> => {
-  try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-lesson-images`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({ topic, items }),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      console.error('Image generation failed:', error);
-      return items.map(() => '');
-    }
-
-    const data = await response.json();
-    return data.imageUrls || items.map(() => '');
-  } catch (error) {
-    console.error('Error calling image generation:', error);
-    return items.map(() => '');
-  }
-};
-
-/**
- * Generate a lesson using AI with images
+ * Generate a complete lesson using Flask backend with Gemini API
  */
 export const generateLessonWithAI = async (
   request: AIGenerationRequest
@@ -87,26 +46,41 @@ export const generateLessonWithAI = async (
   const { topic, itemCount = 5 } = request;
 
   try {
-    // Step 1: Generate lesson content
-    console.log('Generating lesson content for:', topic);
-    const content = await generateLessonContent(topic, itemCount);
+    console.log('Calling Flask API to generate lesson for:', topic);
 
-    // Step 2: Generate images for each item
-    console.log('Generating images for items...');
-    const imageUrls = await generateImages(topic, content.items);
+    const response = await fetch(`${FLASK_API_URL}/api/generate-lesson`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        topic, 
+        item_count: itemCount 
+      }),
+    });
 
-    // Step 3: Combine content with images
-    const itemsWithImages = content.items.map((item, index) => ({
-      ...item,
-      image: imageUrls[index] || '',
-    }));
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Flask API error:', response.status, errorText);
+      throw new Error(`API error: ${response.status}`);
+    }
 
-    // Step 4: Create the lesson
+    const data: FlaskLessonResponse = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to generate lesson');
+    }
+
+    // Create the lesson with local storage
     const formData: LessonFormData = {
-      title: content.title,
-      description: content.description,
-      coverImage: imageUrls[0] || '', // Use first image as cover
-      items: itemsWithImages,
+      title: data.title,
+      description: data.description,
+      coverImage: data.items[0]?.image || '',
+      items: data.items.map(item => ({
+        name: item.name,
+        spokenText: item.spokenText,
+        image: item.image,
+      })),
     };
 
     const lesson = createLesson(formData);
@@ -125,60 +99,46 @@ export const generateLessonWithAI = async (
 };
 
 /**
- * Example of how to call Gemini API directly
- * Uncomment and modify this when you have your API key
+ * Generate lesson content only (without images) - fallback mode
  */
-/*
-export const callGeminiAPI = async (topic: string, apiKey: string) => {
-  const prompt = `Generate an educational lesson about "${topic}" for children aged 4-8.
-  
-Return a valid JSON object with this exact structure:
-{
-  "title": "lesson title",
-  "description": "brief description of what children will learn",
-  "items": [
-    { "name": "item name", "spokenText": "educational text about this item, 1-2 sentences" }
-  ]
-}
-
-Generate exactly 5 items. Keep the language simple and engaging for young children.
-Only return the JSON, no other text.`;
-
-  const response = await fetch(
-    'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent',
-    {
+export const generateLessonContentOnly = async (
+  topic: string,
+  itemCount: number = 5
+): Promise<AIGenerationResult> => {
+  try {
+    const response = await fetch(`${FLASK_API_URL}/api/generate-lesson-content`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
       },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 1024,
-        },
-      }),
+      body: JSON.stringify({ topic, item_count: itemCount }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
     }
-  );
 
-  if (!response.ok) {
-    throw new Error(`Gemini API error: ${response.status}`);
+    const data = await response.json();
+
+    const formData: LessonFormData = {
+      title: data.title,
+      description: data.description,
+      coverImage: '',
+      items: data.items.map((item: { name: string; spokenText: string }) => ({
+        name: item.name,
+        spokenText: item.spokenText,
+        image: '',
+      })),
+    };
+
+    const lesson = createLesson(formData);
+
+    return { success: true, lesson };
+  } catch (error) {
+    console.error('Content generation error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to generate content',
+    };
   }
-
-  const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  
-  if (!text) {
-    throw new Error('No content in Gemini response');
-  }
-
-  // Parse the JSON from the response
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    throw new Error('Could not parse JSON from response');
-  }
-
-  return JSON.parse(jsonMatch[0]);
 };
-*/
