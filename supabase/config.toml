@@ -1,4 +1,0 @@
-project_id = "wprqfpdxxnqnbbqcqqgy"
-
-[functions.generate-lesson-images]
-verify_jwt = false
