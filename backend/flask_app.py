@@ -1,0 +1,210 @@
+"""
+Flask Backend for AI Lesson Generator
+
+This is your Flask backend code. Run it separately with:
+    pip install flask flask-cors google-generativeai
+    python flask_app.py
+
+Set your GEMINI_API_KEY environment variable before running.
+"""
+
+import os
+import base64
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import google.generativeai as genai
+
+app = Flask(__name__)
+CORS(app)  # Enable CORS for React frontend
+
+# Configure Gemini API
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+
+
+@app.route('/api/generate-lesson', methods=['POST'])
+def generate_lesson():
+    """
+    Generate a complete lesson with AI-generated content and images.
+    
+    Request body:
+        {
+            "topic": "Fruits",
+            "item_count": 5
+        }
+    
+    Response:
+        {
+            "success": true,
+            "title": "Learn About Fruits",
+            "description": "...",
+            "items": [
+                {"name": "Apple", "spokenText": "...", "image": "data:image/png;base64,..."}
+            ]
+        }
+    """
+    try:
+        data = request.get_json()
+        topic = data.get('topic', '')
+        item_count = data.get('item_count', 5)
+
+        if not topic:
+            return jsonify({'success': False, 'error': 'Topic is required'}), 400
+
+        if not GEMINI_API_KEY:
+            return jsonify({'success': False, 'error': 'GEMINI_API_KEY not configured'}), 500
+
+        # Step 1: Generate lesson content using Gemini
+        content_model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        content_prompt = f"""Generate an educational lesson about "{topic}" for children aged 4-8.
+
+Return a valid JSON object with this exact structure:
+{{
+    "title": "Learn About {topic}",
+    "description": "A fun lesson about {topic} for young learners.",
+    "items": [
+        {{"name": "item name", "spokenText": "Simple, engaging text about this item (1-2 sentences)"}}
+    ]
+}}
+
+Generate exactly {item_count} items. Keep language simple and child-friendly.
+Only return the JSON, no other text."""
+
+        content_response = content_model.generate_content(content_prompt)
+        content_text = content_response.text
+        
+        # Parse JSON from response
+        import json
+        import re
+        
+        json_match = re.search(r'\{[\s\S]*\}', content_text)
+        if not json_match:
+            raise ValueError('Could not parse JSON from content response')
+        
+        lesson_content = json.loads(json_match.group())
+
+        # Step 2: Generate images for each item using Gemini image generation
+        image_model = genai.GenerativeModel('gemini-2.0-flash-exp-image-generation')
+        
+        items_with_images = []
+        for item in lesson_content.get('items', []):
+            image_prompt = f"""Create a simple, colorful, child-friendly cartoon illustration of "{item['name']}" for an educational children's app about "{topic}".
+The image should be:
+- Bright and cheerful colors
+- Simple and clear shapes
+- Cute and friendly style suitable for ages 4-8
+- No text in the image
+- White or simple background
+- Single subject focused"""
+
+            try:
+                image_response = image_model.generate_content(
+                    image_prompt,
+                    generation_config={
+                        'response_modalities': ['IMAGE', 'TEXT']
+                    }
+                )
+                
+                # Extract base64 image
+                image_data = ''
+                for part in image_response.candidates[0].content.parts:
+                    if hasattr(part, 'inline_data') and part.inline_data.mime_type.startswith('image/'):
+                        image_data = f"data:{part.inline_data.mime_type};base64,{part.inline_data.data}"
+                        break
+                
+                items_with_images.append({
+                    'name': item['name'],
+                    'spokenText': item['spokenText'],
+                    'image': image_data
+                })
+            except Exception as img_error:
+                print(f"Image generation failed for {item['name']}: {img_error}")
+                items_with_images.append({
+                    'name': item['name'],
+                    'spokenText': item['spokenText'],
+                    'image': ''
+                })
+
+        return jsonify({
+            'success': True,
+            'title': lesson_content.get('title', f'Learn About {topic}'),
+            'description': lesson_content.get('description', f'A fun lesson about {topic}'),
+            'items': items_with_images
+        })
+
+    except Exception as e:
+        print(f"Error generating lesson: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/generate-lesson-content', methods=['POST'])
+def generate_lesson_content():
+    """
+    Generate lesson content only (no images) - faster fallback.
+    """
+    try:
+        data = request.get_json()
+        topic = data.get('topic', '')
+        item_count = data.get('item_count', 5)
+
+        if not topic:
+            return jsonify({'success': False, 'error': 'Topic is required'}), 400
+
+        if not GEMINI_API_KEY:
+            return jsonify({'success': False, 'error': 'GEMINI_API_KEY not configured'}), 500
+
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        prompt = f"""Generate an educational lesson about "{topic}" for children aged 4-8.
+
+Return a valid JSON object with this exact structure:
+{{
+    "title": "Learn About {topic}",
+    "description": "A fun lesson about {topic} for young learners.",
+    "items": [
+        {{"name": "item name", "spokenText": "Simple, engaging text about this item (1-2 sentences)"}}
+    ]
+}}
+
+Generate exactly {item_count} items. Keep language simple and child-friendly.
+Only return the JSON, no other text."""
+
+        response = model.generate_content(prompt)
+        response_text = response.text
+        
+        import json
+        import re
+        
+        json_match = re.search(r'\{[\s\S]*\}', response_text)
+        if not json_match:
+            raise ValueError('Could not parse JSON from response')
+        
+        lesson_data = json.loads(json_match.group())
+
+        return jsonify({
+            'success': True,
+            'title': lesson_data.get('title', f'Learn About {topic}'),
+            'description': lesson_data.get('description', f'A fun lesson about {topic}'),
+            'items': lesson_data.get('items', [])
+        })
+
+    except Exception as e:
+        print(f"Error generating content: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Health check endpoint."""
+    return jsonify({
+        'status': 'ok',
+        'gemini_configured': GEMINI_API_KEY is not None
+    })
+
+
+if __name__ == '__main__':
+    print("Starting Flask server on http://localhost:5000")
+    print(f"GEMINI_API_KEY configured: {GEMINI_API_KEY is not None}")
+    app.run(debug=True, host='0.0.0.0', port=5000)
