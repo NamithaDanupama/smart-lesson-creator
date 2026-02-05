@@ -56,7 +56,7 @@ def generate_lesson():
             return jsonify({'success': False, 'error': 'GEMINI_API_KEY not configured'}), 500
 
         # Step 1: Generate lesson content using Gemini
-        content_model = genai.GenerativeModel('gemini-1.5-flash')
+        content_model = genai.GenerativeModel('gemini-2.0-flash')
         
         content_prompt = f"""Generate an educational lesson about "{topic}" for children aged 4-8.
 
@@ -155,7 +155,7 @@ def generate_lesson_content():
         if not GEMINI_API_KEY:
             return jsonify({'success': False, 'error': 'GEMINI_API_KEY not configured'}), 500
 
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-2.0-flash')
         
         prompt = f"""Generate an educational lesson about "{topic}" for children aged 4-8.
 
