@@ -2,17 +2,21 @@
 Flask Backend for AI Lesson Generator
 
 This is your Flask backend code. Run it separately with:
-    pip install flask flask-cors google-generativeai
+    pip install flask flask-cors google-generativeai python-dotenv
     python flask_app.py
 
 Set your GEMINI_API_KEY environment variable before running.
 """
 
 import os
-import base64
+import json
+import re
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import google.generativeai as genai
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for React frontend
@@ -27,22 +31,6 @@ if GEMINI_API_KEY:
 def generate_lesson():
     """
     Generate a complete lesson with AI-generated content and images.
-    
-    Request body:
-        {
-            "topic": "Fruits",
-            "item_count": 5
-        }
-    
-    Response:
-        {
-            "success": true,
-            "title": "Learn About Fruits",
-            "description": "...",
-            "items": [
-                {"name": "Apple", "spokenText": "...", "image": "data:image/png;base64,..."}
-            ]
-        }
     """
     try:
         data = request.get_json()
@@ -55,7 +43,8 @@ def generate_lesson():
         if not GEMINI_API_KEY:
             return jsonify({'success': False, 'error': 'GEMINI_API_KEY not configured'}), 500
 
-        # Step 1: Generate lesson content using Gemini
+        # Step 1: Generate lesson content using Gemini text model
+        print(f"Generating lesson content for topic: {topic}")
         content_model = genai.GenerativeModel('gemini-2.0-flash')
         
         content_prompt = f"""Generate an educational lesson about "{topic}" for children aged 4-8.
@@ -76,20 +65,21 @@ Only return the JSON, no other text."""
         content_text = content_response.text
         
         # Parse JSON from response
-        import json
-        import re
-        
         json_match = re.search(r'\{[\s\S]*\}', content_text)
         if not json_match:
             raise ValueError('Could not parse JSON from content response')
         
         lesson_content = json.loads(json_match.group())
+        print(f"Generated {len(lesson_content.get('items', []))} lesson items")
 
-        # Step 2: Generate images for each item using Gemini image generation
+        # Step 2: Generate images for each item using Gemini IMAGE generation model
+        # IMPORTANT: Use the correct model for image generation
         image_model = genai.GenerativeModel('gemini-2.0-flash-exp-image-generation')
         
         items_with_images = []
-        for item in lesson_content.get('items', []):
+        for idx, item in enumerate(lesson_content.get('items', [])):
+            print(f"Generating image {idx + 1}/{len(lesson_content.get('items', []))}: {item['name']}")
+            
             image_prompt = f"""Create a simple, colorful, child-friendly cartoon illustration of "{item['name']}" for an educational children's app about "{topic}".
 The image should be:
 - Bright and cheerful colors
@@ -100,6 +90,7 @@ The image should be:
 - Single subject focused"""
 
             try:
+                # Use response_modalities to request IMAGE output
                 image_response = image_model.generate_content(
                     image_prompt,
                     generation_config={
@@ -107,20 +98,29 @@ The image should be:
                     }
                 )
                 
-                # Extract base64 image
+                # Extract base64 image from response
                 image_data = ''
-                for part in image_response.candidates[0].content.parts:
-                    if hasattr(part, 'inline_data') and part.inline_data.mime_type.startswith('image/'):
-                        image_data = f"data:{part.inline_data.mime_type};base64,{part.inline_data.data}"
-                        break
+                if image_response.candidates and len(image_response.candidates) > 0:
+                    candidate = image_response.candidates[0]
+                    if candidate.content and candidate.content.parts:
+                        for part in candidate.content.parts:
+                            if hasattr(part, 'inline_data') and part.inline_data:
+                                if part.inline_data.mime_type.startswith('image/'):
+                                    image_data = f"data:{part.inline_data.mime_type};base64,{part.inline_data.data}"
+                                    print(f"  ✓ Image generated for {item['name']}")
+                                    break
                 
+                if not image_data:
+                    print(f"  ⚠ No image data found in response for {item['name']}")
+
                 items_with_images.append({
                     'name': item['name'],
                     'spokenText': item['spokenText'],
                     'image': image_data
                 })
+                
             except Exception as img_error:
-                print(f"Image generation failed for {item['name']}: {img_error}")
+                print(f"  ✗ Image generation failed for {item['name']}: {img_error}")
                 items_with_images.append({
                     'name': item['name'],
                     'spokenText': item['spokenText'],
@@ -136,6 +136,8 @@ The image should be:
 
     except Exception as e:
         print(f"Error generating lesson: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -174,9 +176,6 @@ Only return the JSON, no other text."""
         response = model.generate_content(prompt)
         response_text = response.text
         
-        import json
-        import re
-        
         json_match = re.search(r'\{[\s\S]*\}', response_text)
         if not json_match:
             raise ValueError('Could not parse JSON from response')
@@ -205,6 +204,8 @@ def health_check():
 
 
 if __name__ == '__main__':
+    print("=" * 50)
     print("Starting Flask server on http://localhost:5000")
     print(f"GEMINI_API_KEY configured: {GEMINI_API_KEY is not None}")
+    print("=" * 50)
     app.run(debug=True, host='0.0.0.0', port=5000)
