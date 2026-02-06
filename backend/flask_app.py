@@ -2,7 +2,7 @@
 Flask Backend for AI Lesson Generator
 
 This is your Flask backend code. Run it separately with:
-    pip install flask flask-cors google-generativeai python-dotenv
+    pip install flask flask-cors google-generativeai python-dotenv requests
     python flask_app.py
 
 Set your GEMINI_API_KEY environment variable before running.
@@ -11,6 +11,7 @@ Set your GEMINI_API_KEY environment variable before running.
 import os
 import json
 import re
+import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import google.generativeai as genai
@@ -25,6 +26,47 @@ CORS(app)  # Enable CORS for React frontend
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
+
+
+def generate_image_with_rest_api(prompt: str) -> str:
+    """
+    Generate an image using Gemini's REST API directly.
+    Returns base64 data URL or empty string on failure.
+    """
+    if not GEMINI_API_KEY:
+        return ''
+    
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent?key={GEMINI_API_KEY}"
+    
+    payload = {
+        "contents": [{
+            "parts": [{"text": prompt}]
+        }],
+        "generationConfig": {
+            "responseModalities": ["IMAGE", "TEXT"]
+        }
+    }
+    
+    try:
+        response = requests.post(url, json=payload, timeout=60)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Extract image from response
+        candidates = data.get('candidates', [])
+        if candidates:
+            parts = candidates[0].get('content', {}).get('parts', [])
+            for part in parts:
+                if 'inlineData' in part:
+                    inline_data = part['inlineData']
+                    mime_type = inline_data.get('mimeType', 'image/png')
+                    image_data = inline_data.get('data', '')
+                    if image_data:
+                        return f"data:{mime_type};base64,{image_data}"
+        return ''
+    except Exception as e:
+        print(f"REST API image generation error: {e}")
+        return ''
 
 
 @app.route('/api/generate-lesson', methods=['POST'])
@@ -72,10 +114,7 @@ Only return the JSON, no other text."""
         lesson_content = json.loads(json_match.group())
         print(f"Generated {len(lesson_content.get('items', []))} lesson items")
 
-        # Step 2: Generate images for each item using Gemini IMAGE generation model
-        # IMPORTANT: Use the correct model for image generation
-        image_model = genai.GenerativeModel('gemini-2.0-flash-exp-image-generation')
-        
+        # Step 2: Generate images for each item using REST API
         items_with_images = []
         for idx, item in enumerate(lesson_content.get('items', [])):
             print(f"Generating image {idx + 1}/{len(lesson_content.get('items', []))}: {item['name']}")
@@ -89,43 +128,18 @@ The image should be:
 - White or simple background
 - Single subject focused"""
 
-            try:
-                # Use response_modalities to request IMAGE output
-                image_response = image_model.generate_content(
-                    image_prompt,
-                    generation_config={
-                        'response_modalities': ['IMAGE', 'TEXT']
-                    }
-                )
-                
-                # Extract base64 image from response
-                image_data = ''
-                if image_response.candidates and len(image_response.candidates) > 0:
-                    candidate = image_response.candidates[0]
-                    if candidate.content and candidate.content.parts:
-                        for part in candidate.content.parts:
-                            if hasattr(part, 'inline_data') and part.inline_data:
-                                if part.inline_data.mime_type.startswith('image/'):
-                                    image_data = f"data:{part.inline_data.mime_type};base64,{part.inline_data.data}"
-                                    print(f"  ✓ Image generated for {item['name']}")
-                                    break
-                
-                if not image_data:
-                    print(f"  ⚠ No image data found in response for {item['name']}")
+            image_data = generate_image_with_rest_api(image_prompt)
+            
+            if image_data:
+                print(f"  ✓ Image generated for {item['name']}")
+            else:
+                print(f"  ⚠ No image generated for {item['name']}")
 
-                items_with_images.append({
-                    'name': item['name'],
-                    'spokenText': item['spokenText'],
-                    'image': image_data
-                })
-                
-            except Exception as img_error:
-                print(f"  ✗ Image generation failed for {item['name']}: {img_error}")
-                items_with_images.append({
-                    'name': item['name'],
-                    'spokenText': item['spokenText'],
-                    'image': ''
-                })
+            items_with_images.append({
+                'name': item['name'],
+                'spokenText': item['spokenText'],
+                'image': image_data
+            })
 
         return jsonify({
             'success': True,
